@@ -9,25 +9,47 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import roc_curve
 from sklearn.metrics import confusion_matrix, classification_report
 import scikitplot as skplt
+
 random.seed(123)
 np.random.seed(123)
 tf.random.set_seed(123)
 
-class MyCallback(keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        print()
 
+# class MyCallback(keras.callbacks.Callback):
+#     def on_train_begin(self, logs=None):
+#         self.data = []
+#
+#     def on_epoch_end(self, epoch, logs=None):
+#         cv_loss = model.evaluate(cv_examples, cv_labels, verbose=0)
+#         self.data.append(cv_loss[0])
+#         print("CV loss is: " + str(cv_loss[0]))
+#
+#     def get_data(self):
+#         return self.data
 
-train = pd.read_csv('EKDD_Train.csv')
-# [2, 3, 4, 5, 6, 7, 8, 10, 12, 23, 25, 29, 30, 35, 36, 37, 38, 40]
-train_examples = np.array(train.iloc[:, [2, 3, 4, 5, 6, 7, 8, 10, 12, 23, 25, 29, 30, 35, 36, 37, 38, 40]])
-train_labels = np.array(train['Class'])
+dataset = pd.read_csv('EKDD_Train.csv')
+# [2, 3, 4, 5, 6, 7, 8, 10, 12, 23, 25, 29, 30, 35, 36, 37, 38, 40] selecting optimal subset of features [cite]
 
-size = train_examples.shape[1]
+red_data = np.array(dataset.iloc[:, [4, 2, 5, 3, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35, 41]])
+# train_labels = np.array(train['Class'])
+size = red_data.shape[1] - 1
+leng = red_data.shape[0]
+
+# cv_set = round(leng * 20 / 100)
+# indexes = np.array(random.sample(list(np.arange(leng)), cv_set))
+
+# cv_data = red_data[indexes, :]
+# train_data = np.delete(red_data, indexes, axis=0)
+
+# cv_examples = cv_data[:, :size]
+# cv_labels = cv_data[:, size]
+
+train_examples = red_data[:, :size]
+train_labels = red_data[:, size]
 
 test = pd.read_csv('EKDD_Test.csv')
 
-test_examples = np.array(test.iloc[:, [2, 3, 4, 5, 6, 7, 8, 10, 12, 23, 25, 29, 30, 35, 36, 37, 38, 40]])
+test_examples = np.array(test.iloc[:, [4, 2, 5, 3, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35]])
 test_labels = np.array(test['Class'])
 
 test_labels = test_labels.astype('float32')
@@ -36,79 +58,91 @@ train_labels = train_labels.astype('float32')
 # train_dataset = tf.data.Dataset.from_tensor_slices((train_examples, train_labels))
 # test_dataset = tf.data.Dataset.from_tensor_slices((test_examples, test_labels))
 
-n_fold = 5
-kfold = KFold(n_splits=n_fold, shuffle=True, random_state=123)
-epoch_losses = np.zeros(n_fold)
-cv_losses = np.zeros(n_fold)
+# n_fold = 5
+# kfold = KFold(n_splits=n_fold, shuffle=True, random_state=123)
+# epoch_losses = np.zeros(n_fold)
+# cv_losses = np.zeros(n_fold)
 
-fold_n = 1
-#for train, test in kfold.split(train_examples, train_labels):
-    #a = train
-    #b = test
+# fold_n = 1
+# for train, test in kfold.split(train_examples, train_labels):
+# a = train
+# b = test
 
 
-    # 8 8 su 10 epoche da 90 per cento, su 50 è 79.4 per cento
-    #12 12 su 30 epoche -> oltre le 30 epoche la loss converge ed è sul 80% accuracy sul test set
-    #24 12 su 50 epoche -> siamo sul 79 per cento accuracy
-    #14 12 su 50 epoche -> siamo sul 78 ma è incredibile l accuracy e convergenza sul training set
-    #12 8 su 50 epoche -> siamo sul 79,4 ma è sbilanciato sui falsi negativi il test, ottima accuracy sul train
+# 8 8 su 10 epoche da 90 per cento, su 50 è 79.4 per cento
+# 12 12 su 30 epoche -> oltre le 30 epoche la loss converge ed è sul 80% accuracy sul test set
+# 24 12 su 50 epoche -> siamo sul 79 per cento accuracy
+# 14 12 su 50 epoche -> siamo sul 78 ma è incredibile l accuracy e convergenza sul training set
+# 12 8 su 50 epoche -> siamo sul 79,4 ma è sbilanciato sui falsi negativi il test, ottima accuracy sul train
 
+# 24 12 ottimale auc 99 per cento, loss basso e accuracy bassissima, sul test da 79.4 per cento
 
 model = tf.keras.Sequential([
-    tf.keras.layers.Dense(8, input_dim=size, activation='relu'),
-    tf.keras.layers.Dense(8, activation='relu'),
+    tf.keras.layers.Dense(8, input_dim=size, activation='sigmoid'),
+    tf.keras.layers.Dense(8, input_dim=size, activation='sigmoid'),
     tf.keras.layers.Dense(1, activation='sigmoid'),
 
 ])
 
-    # model.summary()
+# model.summary()
 
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005),
               loss=tf.keras.losses.BinaryCrossentropy(),
               metrics=[tf.keras.metrics.BinaryAccuracy(),
                        tf.keras.metrics.FalsePositives(),
-                       tf.keras.metrics.FalseNegatives()])
-    #print('------------------------------------------------------------------------')
-    #print('Training for fold ' + str(fold_n))
+                       tf.keras.metrics.FalseNegatives(),
+                       tf.keras.metrics.AUC()])
+# print('------------------------------------------------------------------------')
+# print('Training for fold ' + str(fold_n))
+n_epochs = 20
+early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min')
+history = model.fit(train_examples, train_labels,  # [train]
+                    batch_size=32,
+                    epochs=n_epochs,
+                    shuffle=True,
+                    validation_split=0.2)
 
-history = model.fit(train_examples, train_labels, #[train]
-                            batch_size=32,
-                            epochs=50,
-                            shuffle=True)
-        #f = open("Evaluation.txt", 'a')
+# f = open("Evaluation.txt", 'a')
+
 test_acc = model.evaluate(test_examples, test_labels, verbose=0)
 print(test_acc)
 y_pred_keras = model.predict(test_examples).ravel()
 fpr_keras, tpr_keras, threashold_keras = roc_curve(test_labels, y_pred_keras)
 
-
 plt.figure(1)
-plt.plot([0, 1], [0, 1], 'k--')
-plt.plot(fpr_keras, tpr_keras)
+plt.plot([0, 1], [0, 1], 'b--')
+plt.plot(fpr_keras, tpr_keras, 'r')
+plt.xlabel('FPR')
+plt.ylabel('TPR')
+plt.title("ROC Curve")
+plt.grid(color='green', linestyle='--', linewidth=0.2)
 
 plt.figure(2)
-plt.plot(history.history['loss'])
-
+plt.plot(np.arange(n_epochs), history.history['loss'], np.arange(n_epochs), history.history['val_loss'])
+plt.xlabel("N° Epochs")
+plt.ylabel("Loss")
+plt.legend(('Training Loss', 'CV Loss'), loc='upper center', shadow=True)
+plt.grid(color='green', linestyle='--', linewidth=0.2)
 plt.show()
 
-        #f.write("Accuracy for neuron1: " + str(n_neurons1) + " and neurons2: " + str(n_neurons2) + " is: " + str(test_acc[1]) + "\n")
+# f.write("Accuracy for neuron1: " + str(n_neurons1) + " and neurons2: " + str(n_neurons2) + " is: " + str(test_acc[1]) + "\n")
 
-#f.close()
+# f.close()
 
-    # alla fine delle epoche:
-    # loss sul test set della CV
-    #scores = model.evaluate(train_examples[test], train_labels[test], verbose=0)
-    #cv_losses[fold_n - 1] = str(scores[0])
-    # media delle loss nelle epoche per questa fold
-    #epoch_losses[fold_n - 1] = np.mean(history.history['loss'])
-    #fold_n = fold_n + 1
+# alla fine delle epoche:
+# loss sul test set della CV
+# scores = model.evaluate(train_examples[test], train_labels[test], verbose=0)
+# cv_losses[fold_n - 1] = str(scores[0])
+# media delle loss nelle epoche per questa fold
+# epoch_losses[fold_n - 1] = np.mean(history.history['loss'])
+# fold_n = fold_n + 1
 
-#cv_loss = np.mean(cv_losses)
-#print('Error on CV set is: ' + str(cv_loss))
-#test_acc = model.evaluate(test_examples, test_labels, verbose=0)
+# cv_loss = np.mean(cv_losses)
+# print('Error on CV set is: ' + str(cv_loss))
+# test_acc = model.evaluate(test_examples, test_labels, verbose=0)
 
-#print('Error on test set is: ' + str(test_acc[0]))
-#print('Accuracy on test set is: ' + str(test_acc[1]))
+# print('Error on test set is: ' + str(test_acc[0]))
+# print('Accuracy on test set is: ' + str(test_acc[1]))
 
 # x = np.arange(5)
 # fig, ax = plt.subplots()
@@ -117,4 +151,4 @@ plt.show()
 # plt.xlabel('K-th iteration')
 # plt.ylabel('CrossEntropy')
 # plt.show()
-    # test_predictions = model.predict(test_dataset).T
+# test_predictions = model.predict(test_dataset).T
