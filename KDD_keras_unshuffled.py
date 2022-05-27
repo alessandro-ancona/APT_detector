@@ -36,15 +36,20 @@ data2 = pd.read_csv('EKDD_Test.csv')
 # plt.show()
 # [2, 3, 4, 5, 6, 7, 8, 10, 12, 23, 25, 29, 30, 35, 36, 37, 38, 40] selecting optimal subset of features [cite]
 
-data1 = np.array(data1.iloc[:, [0, 1, 4, 2, 5, 3, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35, 41]])
-data2 = np.array(data2.iloc[:, [0, 1, 4, 2, 5, 3, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35, 41]])
+data_train = np.array(data1.iloc[:, [0, 1, 4, 2, 5, 3, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35, 41]])
+data_test = np.array(data2.iloc[:, [0, 1, 4, 2, 5, 3, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35, 41]])
 
-dataset = np.concatenate((data1, data2))
-np.random.shuffle(dataset)
+np.random.shuffle(data_train)
+np.random.shuffle(data_test)
 # train_labels = np.array(train['Class'])
-size = dataset.shape[1] - 1
-leng = dataset.shape[0]
+size = data_train.shape[1] - 1
+leng = data_train.shape[0]
 
+train_labels = data_train[:, size]
+train_examples = data_train[:, :size]
+
+test_labels = data_test[:, size]
+test_examples = data_test[:, :size]
 # cv_set = round(leng * 20 / 100)
 # indexes = np.array(random.sample(list(np.arange(leng)), cv_set))
 
@@ -53,14 +58,6 @@ leng = dataset.shape[0]
 
 # cv_examples = cv_data[:, :size]
 # cv_labels = cv_data[:, size]
-
-train = round(leng * 90 / 100)
-
-train_examples = dataset[:train, :size]
-train_labels = dataset[:train, size]
-
-test_examples = dataset[train:, :size]
-test_labels = dataset[train:, size]
 
 test_labels = test_labels.astype('float32')
 train_labels = train_labels.astype('float32')
@@ -86,13 +83,13 @@ train_labels = train_labels.astype('float32')
 
 # 24 12 ottimale auc 99 per cento, loss basso e accuracy bassissima, sul test da 79.4 per cento
 
-train_examples = np.expand_dims(train_examples, 1)
-test_examples = np.expand_dims(test_examples, 1)
+#train_examples = np.expand_dims(train_examples, 1)
+#test_examples = np.expand_dims(test_examples, 1)
 
 model = tf.keras.Sequential([
-    tf.keras.layers.LSTM(128),
+    #tf.keras.layers.GRU(128),
     tf.keras.layers.Dense(12, input_dim=size, activation='linear'),
-    tf.keras.layers.Dense(8, activation='sigmoid'),
+    tf.keras.layers.Dense(12, activation='sigmoid'),
     tf.keras.layers.Dense(1, activation='sigmoid'),
 
 ])
@@ -108,7 +105,6 @@ model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
 # print('------------------------------------------------------------------------')
 # print('Training for fold ' + str(fold_n))
 n_epochs = 20
-early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', mode='min')
 history = model.fit(train_examples, train_labels,  # [train]
                     batch_size=32,
                     epochs=n_epochs,
