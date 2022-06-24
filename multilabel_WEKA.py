@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
-random.seed(123)
-np.random.seed(123)
-tf.random.set_seed(123)
+random.seed(555)
+np.random.seed(555)
+tf.random.set_seed(555)
 
 attack_dict = {
     'normal': 0,
@@ -175,23 +175,25 @@ for row in test_data:
     row[1] = protocol_dict[row[1]]
     row[3] = flag_dict[row[3]]
 
-val_index = round(leng * 80 / 100)
+index = 5000
 
 train_data = train_data.astype('float32')
 train_data = train_data.astype('float32')
 test_data = test_data.astype('float32')
 test_data = test_data.astype('float32')
 
+train_examples = train_data[:5000, :size]
+train_labels = train_data[:5000, size]
 
+B_examples = train_data[5000:10000, :size]
+B_labels = train_data[5000:10000, size]
 
-train_examples = train_data[:val_index, :size]
-train_labels = train_data[:val_index, size]
+new_dataset = np.concatenate((train_data[12500:15000, :], test_data[2500:5000, :]), axis=0)
+C_examples = new_dataset[:5000, :size]
+C_labels = new_dataset[:5000, size]
 
-val_examples = train_data[val_index:, :size]
-val_labels = train_data[val_index:, size]
-
-test_examples = test_data[:5000, :size]
-test_labels = test_data[:5000, size]
+D_examples = test_data[10000:15000, :size]
+D_labels = test_data[10000:15000, size]
 
 encoder = LabelEncoder()
 encoder.fit(train_labels)
@@ -199,34 +201,32 @@ encoded_Y = encoder.transform(train_labels)
 train_categorical_labels = np_utils.to_categorical(encoded_Y)
 
 encoder = LabelEncoder()
-encoder.fit(test_labels)
-encoded_Y = encoder.transform(test_labels)
-test_categorical_labels = np_utils.to_categorical(encoded_Y)
+encoder.fit(B_labels)
+encoded_Y = encoder.transform(B_labels)
+B_categorical_labels = np_utils.to_categorical(encoded_Y)
 
 encoder = LabelEncoder()
-encoder.fit(val_labels)
-encoded_Y = encoder.transform(val_labels)
-val_categorical_labels = np_utils.to_categorical(encoded_Y)
+encoder.fit(C_labels)
+encoded_Y = encoder.transform(C_labels)
+C_categorical_labels = np_utils.to_categorical(encoded_Y)
+
+encoder = LabelEncoder()
+encoder.fit(D_labels)
+encoded_Y = encoder.transform(D_labels)
+D_categorical_labels = np_utils.to_categorical(encoded_Y)
 
 train_examples = np.expand_dims(train_examples, 1)
-test_examples = np.expand_dims(test_examples, 1)
-val_examples = np.expand_dims(val_examples, 1)
+B_examples = np.expand_dims(B_examples, 1)
+C_examples = np.expand_dims(C_examples, 1)
+D_examples = np.expand_dims(D_examples, 1)
 
 neurons1 = 39
 neurons2 = 26
-#f = open("NeuronSweep.txt", "a")
-"""
-for neurons1 in range(8, 51):
-    for neurons2 in range(8, neurons1+1):
-"""
-random.seed(123)
-np.random.seed(123)
-tf.random.set_seed(123)
 
 model = tf.keras.Sequential([
-    tf.keras.layers.LSTM(256),
-    tf.keras.layers.Dense(neurons1, activation='relu'),
-    tf.keras.layers.Dense(neurons2, activation='relu'),
+    tf.keras.layers.LSTM(512),
+    tf.keras.layers.Dense(100, activation='relu'),
+    tf.keras.layers.Dense(100, activation='relu'),
     tf.keras.layers.Dense(5, activation='softmax')])
 
 model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
@@ -241,7 +241,8 @@ n_epochs = 50
 history = model.fit(train_examples, train_categorical_labels,
                     batch_size=512,
                     epochs=n_epochs,
-                    shuffle=False)
+                    shuffle=False,
+                    validation_split=0.2)
 
                 # y_pred_keras = model.predict(test_examples).ravel()
                 # fpr_keras, tpr_keras, threashold_keras = roc_curve(test_labels, y_pred_keras)
@@ -286,8 +287,9 @@ plt.show()
 print(report)
 """
 training_acc = model.evaluate(train_examples, train_categorical_labels, verbose=0)
-val_acc = model.evaluate(val_examples, val_categorical_labels, verbose=0)
-test_acc = model.evaluate(test_examples, test_categorical_labels, verbose=0)
-print(str(neurons1) + " " + str(neurons2) + ": TRAINING_LOSS = " + str(training_acc) +
-      " VAL_LOSS = " + str(val_acc) + " TEST_PERFORMANCE = " + str(test_acc) + "\n")
-#f.close()
+B_acc = model.evaluate(B_examples, B_categorical_labels, verbose=0)
+C_acc = model.evaluate(C_examples, C_categorical_labels, verbose=0)
+D_acc = model.evaluate(D_examples, D_categorical_labels, verbose=0)
+
+print(str(neurons1) + " " + str(neurons2) + ": TRAINING_LOSS = " + str(training_acc) + " B_PERFORMANCE = " + str(B_acc) + " C_PERFORMANCE = " + str(C_acc) + " D_PERFORMANCE = " + str(D_acc) + "\n")
+

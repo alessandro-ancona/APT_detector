@@ -6,14 +6,15 @@ import os
 from sklearn.preprocessing import StandardScaler
 import random
 import matplotlib.pyplot as plt
+
 from sklearn.model_selection import KFold
 from sklearn.metrics import roc_curve
 from sklearn.metrics import confusion_matrix, classification_report
 import scikitplot as skplt
 import seaborn as sns
-random.seed(123)
-np.random.seed(123)
-tf.random.set_seed(123)
+random.seed(555)
+np.random.seed(555)
+tf.random.set_seed(555)
 
 
 # class MyCallback(keras.callbacks.Callback):
@@ -134,8 +135,8 @@ plt.figure(2)
 plt.plot(np.arange(n_epochs), history.history['loss'], np.arange(n_epochs), history.history['val_loss'])
 plt.xlabel("N° Epochs")
 plt.ylabel("Loss")
-plt.legend(('Training Loss', 'CV Loss'), loc='upper center', shadow=True)
-plt.grid(color='green', linestyle='--', linewidth=0.2)
+plt.legend(('Training Loss', 'Validation Loss'), loc='upper center', shadow=True)
+plt.grid(color='gray', linestyle='--', linewidth=0.2)
 plt.show()
 
 # f.write("Accuracy for neuron1: " + str(n_neurons1) + " and neurons2: " + str(n_neurons2) + " is: " + str(test_acc[1]) + "\n")

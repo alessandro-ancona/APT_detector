@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 import random
 from sklearn.preprocessing import LabelEncoder
 import matplotlib.pyplot as plt
+from matplotlib import figure
 from sklearn.model_selection import KFold
 from sklearn.metrics import roc_curve
 from sklearn.metrics import confusion_matrix, classification_report
@@ -19,7 +20,7 @@ np.random.seed(123)
 tf.random.set_seed(123)
 
 attack_dict = {
-    'normal': 0,
+    'normal': 0,  # normal
 
     'back': 1,  # DOS
     'land': 1,
@@ -32,14 +33,14 @@ attack_dict = {
     'processtable': 1,
     'udpstorm': 1,
 
-    'ipsweep': 2,  # PROBE
+    'ipsweep': 2,  # PROBE - Inf. gathering
     'nmap': 2,
     'portsweep': 2,
     'satan': 2,
     'mscan': 2,
     'saint': 2,
 
-    'ftp_write': 3,  # R2L
+    'ftp_write': 3,  # R2L - C2
     'guess_passwd': 3,
     'imap': 3,
     'multihop': 3,
@@ -55,7 +56,7 @@ attack_dict = {
     'xsnoop': 3,
     'worm': 3,
 
-    'buffer_overflow': 4,  #U2R
+    'buffer_overflow': 4,  #U2R - Action on objectives
     'loadmodule': 4,
     'perl': 4,
     'rootkit': 4,
@@ -162,7 +163,8 @@ KDDTrain = np.array(pd.read_csv("KDDTrain.csv"))
 KDDTest = np.array(pd.read_csv("KDDTest.csv"))
 
 KDDdataset = np.concatenate((KDDTrain, KDDTest))
-KDDdataset = KDDdataset[:, [0, 1, 2, 3, 5, 4, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35, 41]]
+KDDdataset = np.delete(KDDdataset, 42, 1)
+# KDDdataset = KDDdataset[:, [0, 1, 2, 3, 5, 4, 28, 29, 33, 32, 34, 11, 22, 24, 37, 25, 38, 35, 41]]
 np.random.shuffle(KDDdataset)
 size = KDDdataset.shape[1] - 1
 leng = KDDdataset.shape[0]
@@ -197,49 +199,129 @@ encoder.fit(test_labels)
 encoded_Y = encoder.transform(test_labels)
 test_categorical_labels = np_utils.to_categorical(encoded_Y)
 
-train_examples = np.expand_dims(train_examples, 1)
-test_examples = np.expand_dims(test_examples, 1)
+KFOLD = False
+neurons1 = 36  # 12  - 36,16 funziona
+neurons2 = 16  # 8
 
-model = tf.keras.Sequential([
-    tf.keras.layers.LSTM(128),
-    tf.keras.layers.Dense(12, input_dim=size, activation='linear'),
-    tf.keras.layers.Dense(8, activation='sigmoid'),
-    tf.keras.layers.Dense(5, activation='sigmoid'),
+if KFOLD:
 
-])
+    n_fold = 10
+    kfold = KFold(n_splits=n_fold, shuffle=True, random_state=123)
+    epoch_losses = np.zeros(n_fold)
+    cv_losses = np.zeros(n_fold)
+    fold_n = 1
+    train_examples = np.expand_dims(train_examples, 1)
+    test_examples = np.expand_dims(test_examples, 1)
 
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
-              loss=tf.keras.losses.CategoricalCrossentropy(),
-              metrics=[tf.keras.metrics.CategoricalAccuracy(),
-                       tf.keras.metrics.FalsePositives(),
-                       tf.keras.metrics.FalseNegatives(),
-                       tf.keras.metrics.AUC()])
+    for train, test in kfold.split(train_examples, train_labels):
 
-n_epochs = 20
-history = model.fit(train_examples, train_categorical_labels,  # [train]
-                    batch_size=32,
-                    epochs=n_epochs,
-                    shuffle=True,
-                    validation_split=0.2)
+        model = tf.keras.Sequential([
+            tf.keras.layers.LSTM(128),
+            tf.keras.layers.Dense(neurons1, activation='relu'),
+            tf.keras.layers.Dense(neurons2, activation='relu'),
+            tf.keras.layers.Dense(5, activation='softmax'),
+
+        ])
+
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+                      loss=tf.keras.losses.CategoricalCrossentropy(),
+                      metrics=[tf.keras.metrics.CategoricalAccuracy(),
+                               tf.keras.metrics.FalsePositives(),
+                               tf.keras.metrics.FalseNegatives(),
+                               tf.keras.metrics.AUC()])
+
+        print('------------------------------------------------------------------------')
+        print('Training for fold ' + str(fold_n))
+
+        n_epochs = 30
+        history = model.fit(train_examples[train], train_categorical_labels[train],  # [train]
+                            batch_size=512,
+                            epochs=n_epochs,
+                            shuffle=True,
+                            #validation_split=0.2
+                            )
 
 
-test_acc = model.evaluate(test_examples, test_categorical_labels, verbose=0)
-print(test_acc)
-y_pred_keras = model.predict(test_examples).ravel()
-fpr_keras, tpr_keras, threashold_keras = roc_curve(test_labels, y_pred_keras)
+        #test_acc = model.evaluate(test_examples, test_categorical_labels, verbose=0)
+        #print(test_acc)
+        # alla fine delle epoche:
+        # loss sul test set della CV
+        scores = model.evaluate(train_examples[test], train_categorical_labels[test], verbose=0)
+        cv_losses[fold_n - 1] = scores[0]
+        # media delle loss nelle epoche per questa fold
+        epoch_losses[fold_n - 1] = np.mean(history.history['loss'])
+        fold_n = fold_n + 1
 
-plt.figure(1)
-plt.plot([0, 1], [0, 1], 'b--')
-plt.plot(fpr_keras, tpr_keras, 'r')
-plt.xlabel('FPR')
-plt.ylabel('TPR')
-plt.title("ROC Curve")
-plt.grid(color='green', linestyle='--', linewidth=0.2)
+    # plotting
 
-plt.figure(2)
-plt.plot(np.arange(n_epochs), history.history['loss'], np.arange(n_epochs), history.history['val_loss'])
-plt.xlabel("N° Epochs")
-plt.ylabel("Loss")
-plt.legend(('Training Loss', 'CV Loss'), loc='upper center', shadow=True)
-plt.grid(color='green', linestyle='--', linewidth=0.2)
+    x = np.arange(n_fold)
+    plt.plot(x, cv_losses, x, epoch_losses)
+    plt.show()
+
+
+else:
+
+    train_examples = np.expand_dims(train_examples, 1)
+    test_examples = np.expand_dims(test_examples, 1)
+
+    model = tf.keras.Sequential([
+        tf.keras.layers.LSTM(256),
+        tf.keras.layers.Dense(neurons1, activation='relu'),
+        tf.keras.layers.Dense(neurons2, activation='relu'),
+        tf.keras.layers.Dense(5, activation='softmax'),
+
+    ])
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+                  loss=tf.keras.losses.CategoricalCrossentropy(),
+                  metrics=[tf.keras.metrics.CategoricalAccuracy(),
+                           tf.keras.metrics.FalsePositives(),
+                           tf.keras.metrics.FalseNegatives(),
+                           tf.keras.metrics.AUC()])
+
+
+    n_epochs = 50
+    history = model.fit(train_examples, train_categorical_labels,
+                        batch_size=512,
+                        epochs=n_epochs,
+                        shuffle=True,
+                        validation_split=0.2
+                        )
+
+    # test_acc = model.evaluate(test_examples, test_categorical_labels, verbose=0)
+    # print(test_acc)
+    # alla fine delle epoche:
+    # loss sul test set della CV
+
+# y_pred_keras = model.predict(test_examples).ravel()
+# fpr_keras, tpr_keras, threashold_keras = roc_curve(test_labels, y_pred_keras)
+
+plt.figure(figsize=(6, 4), dpi=300)
+plt.plot(np.arange(n_epochs), history.history['loss'], '-b', np.arange(n_epochs), history.history['val_loss'], '-r', linewidth="0.8")
+plt.xlabel("\nN° Epochs", fontsize="medium")
+plt.ylabel("Loss\n", fontsize="medium")
+plt.legend(('Training Loss', 'Validation Loss'), fontsize="large", loc='upper right', shadow=True)
+plt.grid(color='gray', linestyle='--', linewidth=0.2)
 plt.show()
+
+y_pred = model.predict(test_examples)
+y_pred = np.argmax(y_pred, axis=1)
+y_labels = np.argmax(test_categorical_labels, axis=1)
+
+report = classification_report(test_labels, y_pred, target_names=['Normal', 'DoS', 'Probe', 'R2L', 'U2R'], digits=4, zero_division=1, output_dict=True)
+supports = [report['Normal']['support'], report['DoS']['support'], report['Probe']['support'], report['R2L']['support'], report['U2R']['support']]
+cf_matrix = confusion_matrix(y_labels, y_pred)
+plt.figure(figsize=(6, 4), dpi=300)
+ax = sns.heatmap(cf_matrix/supports, annot=True, cmap='Blues', fmt='.2%') # annot_kws={"fontsize": "large"}
+ax.set_xlabel('\nPredicted Values', fontsize="xx-large")
+ax.set_ylabel('Actual Values\n', fontsize="xx-large");
+
+## Ticket labels - List must be in alphabetical order
+ax.xaxis.set_ticklabels(['Normal', 'DoS', 'Probe', 'R2L', 'U2R'])
+ax.yaxis.set_ticklabels(['Normal', 'DoS', 'Probe', 'R2L', 'U2R'])
+
+## Display the visualization of the Confusion Matrix.
+plt.show()
+print(report)
+
+

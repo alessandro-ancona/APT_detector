@@ -83,12 +83,12 @@ train_labels = train_labels.astype('float32')
 
 # 24 12 ottimale auc 99 per cento, loss basso e accuracy bassissima, sul test da 79.4 per cento
 
-#train_examples = np.expand_dims(train_examples, 1)
-#test_examples = np.expand_dims(test_examples, 1)
+train_examples = np.expand_dims(train_examples, 1)
+test_examples = np.expand_dims(test_examples, 1)
 
 model = tf.keras.Sequential([
-    #tf.keras.layers.GRU(128),
-    tf.keras.layers.Dense(12, input_dim=size, activation='linear'),
+    tf.keras.layers.GRU(128),
+    tf.keras.layers.Dense(12, input_dim=size, activation='relu'),
     tf.keras.layers.Dense(12, activation='sigmoid'),
     tf.keras.layers.Dense(1, activation='sigmoid'),
 
