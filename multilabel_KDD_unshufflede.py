@@ -8,30 +8,43 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
+import time
 random.seed(123)
 np.random.seed(123)
 tf.random.set_seed(123)
 
+
+class TimeHistory(tf.keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.times = []
+
+    def on_epoch_begin(self, batch, logs={}):
+        self.epoch_time_start = time.time()
+
+    def on_epoch_end(self, batch, logs={}):
+        self.times.append(time.time() - self.epoch_time_start)
+
+
 attack_dict = {
     'normal': 0,
 
-    'back': 1,  # DOS
-    'land': 1,
-    'neptune': 1,
-    'pod': 1,
-    'smurf': 1,
-    'teardrop': 1,
-    'mailbomb': 1,
-    'apache2': 1,
-    'processtable': 1,
-    'udpstorm': 1,
+    'back': 4,  # DOS
+    'land': 4,
+    'neptune': 4,
+    'pod': 4,
+    'smurf': 4,
+    'teardrop': 4,
+    'mailbomb': 4,
+    'apache2': 4,
+    'processtable': 4,
+    'udpstorm': 4,
 
-    'ipsweep': 2,  # PROBE
-    'nmap': 2,
-    'portsweep': 2,
-    'satan': 2,
-    'mscan': 2,
-    'saint': 2,
+    'ipsweep': 1,  # PROBE
+    'nmap': 1,
+    'portsweep': 1,
+    'satan': 1,
+    'mscan': 1,
+    'saint': 1,
 
     'ftp_write': 3,  # R2L
     'guess_passwd': 3,
@@ -49,14 +62,14 @@ attack_dict = {
     'xsnoop': 3,
     'worm': 3,
 
-    'buffer_overflow': 4,  #U2R
-    'loadmodule': 4,
-    'perl': 4,
-    'rootkit': 4,
-    'httptunnel': 4,
-    'ps': 4,
-    'sqlattack': 4,
-    'xterm': 4
+    'buffer_overflow': 2,  #U2R
+    'loadmodule': 2,
+    'perl': 2,
+    'rootkit': 2,
+    'httptunnel': 2,
+    'ps': 2,
+    'sqlattack': 2,
+    'xterm': 2
 }
 
 service_dict = {
@@ -157,8 +170,8 @@ KDDTest = np.array(pd.read_csv("KDDTest.csv"))
 
 train_data = np.delete(KDDTrain, 42, 1)
 test_data = np.delete(KDDTest, 42, 1)
-np.random.shuffle(KDDTrain)
-np.random.shuffle(KDDTest)
+#np.random.shuffle(KDDTrain)
+#np.random.shuffle(KDDTest)
 
 size = train_data.shape[1] - 1
 leng = train_data.shape[0]
@@ -175,23 +188,19 @@ for row in test_data:
     row[1] = protocol_dict[row[1]]
     row[3] = flag_dict[row[3]]
 
-val_index = round(leng * 80 / 100)
-
 train_data = train_data.astype('float32')
 train_data = train_data.astype('float32')
 test_data = test_data.astype('float32')
 test_data = test_data.astype('float32')
 
+train_data = np.delete(train_data, np.where(train_data[:, size] == 4), axis=0)
+test_data = np.delete(test_data, np.where(test_data[:, size] == 4), axis=0)
 
+train_examples = train_data[:, :size]
+train_labels = train_data[:, size]
 
-train_examples = train_data[:val_index, :size]
-train_labels = train_data[:val_index, size]
-
-val_examples = train_data[val_index:, :size]
-val_labels = train_data[val_index:, size]
-
-test_examples = test_data[:5000, :size]
-test_labels = test_data[:5000, size]
+test_examples = test_data[:, :size]
+test_labels = test_data[:, size]
 
 encoder = LabelEncoder()
 encoder.fit(train_labels)
@@ -203,91 +212,112 @@ encoder.fit(test_labels)
 encoded_Y = encoder.transform(test_labels)
 test_categorical_labels = np_utils.to_categorical(encoded_Y)
 
-encoder = LabelEncoder()
-encoder.fit(val_labels)
-encoded_Y = encoder.transform(val_labels)
-val_categorical_labels = np_utils.to_categorical(encoded_Y)
-
 train_examples = np.expand_dims(train_examples, 1)
 test_examples = np.expand_dims(test_examples, 1)
-val_examples = np.expand_dims(val_examples, 1)
 
+L = 256  # 64, 128, 256
 neurons1 = 39
-neurons2 = 26
-#f = open("NeuronSweep.txt", "a")
-"""
-for neurons1 in range(8, 51):
-    for neurons2 in range(8, neurons1+1):
-"""
-random.seed(123)
-np.random.seed(123)
-tf.random.set_seed(123)
+neurons = [13, 26, 39]  # 13 26 39
+file = open("results_performance_" + str(L) +".txt", "w")
 
-model = tf.keras.Sequential([
-    tf.keras.layers.LSTM(256),
-    tf.keras.layers.Dense(neurons1, activation='relu'),
-    tf.keras.layers.Dense(neurons2, activation='relu'),
-    tf.keras.layers.Dense(5, activation='softmax')])
+for neurons2 in neurons:
+    model = tf.keras.Sequential([
+        tf.keras.layers.LSTM(L),
+        tf.keras.layers.Dense(neurons1, activation='relu'),
+        tf.keras.layers.Dense(neurons2, activation='relu'),
+        tf.keras.layers.Dense(4, activation='softmax')])
 
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
-              loss=tf.keras.losses.CategoricalCrossentropy(),
-              metrics=[tf.keras.metrics.CategoricalAccuracy(),
-                       tf.keras.metrics.FalsePositives(),
-                       tf.keras.metrics.FalseNegatives(),
-                       tf.keras.metrics.AUC()])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+                  loss=tf.keras.losses.CategoricalCrossentropy(),
+                  metrics=[tf.keras.metrics.CategoricalAccuracy(),
+                           tf.keras.metrics.TruePositives(),
+                           tf.keras.metrics.FalsePositives(),
+                           tf.keras.metrics.Precision(),
+                           tf.keras.metrics.Recall(),
+                           tf.keras.metrics.AUC()])
 
-print("Training for neurons1: " + str(neurons1) + ", neurons2: " + str(neurons2))
-n_epochs = 50
-history = model.fit(train_examples, train_categorical_labels,
-                    batch_size=512,
-                    epochs=n_epochs,
-                    shuffle=False)
+    print("Training for LSTM: " + str(L) + ", neurons1: " + str(neurons1) + ", neurons2: " + str(neurons2))
+    n_epochs = 100
+    time_callback = TimeHistory()
+    history = model.fit(train_examples, train_categorical_labels,
+                        batch_size=512,
+                        epochs=n_epochs,
+                        shuffle=False,
+                        validation_split=0.2,
+                        callbacks=[time_callback])
+    file.write("\nLSTM: " + str(L) + ", " + "NEURONS: " + str(neurons1) + ", " + str(neurons2) + " ***************************************** \n")
+    # print("LSTM: " + str(L) + ", " + "NEURONS: " + str(neurons1) + ", " + str(neurons2) + ": " + str(model.evaluate(test_examples, test_categorical_labels, verbose=False)) + "\n")
 
-                # y_pred_keras = model.predict(test_examples).ravel()
-                # fpr_keras, tpr_keras, threashold_keras = roc_curve(test_labels, y_pred_keras)
+                    # y_pred_keras = model.predict(test_examples).ravel()
+                    # fpr_keras, tpr_keras, threashold_keras = roc_curve(test_labels, y_pred_keras)
 
-"""
-plt.figure(figsize=(6, 4), dpi=300)
-plt.plot(np.arange(n_epochs), history.history['loss'], '-b',
-         np.arange(n_epochs), history.history['val_loss'], '-r',
-         linewidth="0.8")
-plt.xlabel("\nN° Epochs", fontsize="medium")
-plt.ylabel("Loss\n", fontsize="medium")
-plt.legend(('Training Loss', 'Validation Loss'), fontsize="large", loc='upper right', shadow=True)
-plt.grid(color='gray', linestyle='--', linewidth=0.2)
-plt.show()
+    # LEARNING CURVES PLOT ---------------------------------------------------------------------------------------------
 
-y_pred = model.predict(test_examples)
-y_pred = np.argmax(y_pred, axis=1)
-y_labels = np.argmax(test_categorical_labels, axis=1)
+    plt.subplots(figsize=(6, 3), dpi=300)
+    plt.semilogy(np.arange(n_epochs), history.history['loss'], '-b',
+             np.arange(n_epochs), history.history['val_loss'], '-r',
+             linewidth="0.8")
+    plt.ylim([10**-3, 10])
+    plt.xlabel("N° Epochs", fontsize="medium")
+    plt.ylabel("Loss", fontsize="medium")
+    plt.legend(('Training Loss', 'Validation Loss'), fontsize="medium", loc='upper right', shadow=True)
+    plt.grid(color='gray', linestyle='--', linewidth=0.2)
+    plt.subplots_adjust(left=0.1, right=0.9, bottom=0.15, top=0.85)
+    plt.savefig("logLC" + str(L) + "_39_" + str(neurons2) + ".eps")
+    #plt.show()
 
-report = classification_report(test_labels, y_pred,
-                               target_names=['Normal', 'DoS', 'Probe', 'R2L', 'U2R'],
-                               digits=4,
-                               zero_division=1,
-                               output_dict=True)
-supports = [report['Normal']['support'],
-            report['DoS']['support'],
-            report['Probe']['support'],
-            report['R2L']['support'],
-            report['U2R']['support']]
-cf_matrix = confusion_matrix(y_labels, y_pred)
-plt.figure(figsize=(6, 4), dpi=300)
-ax = sns.heatmap((cf_matrix.T/supports).T, annot=True, cmap='Blues', fmt='.2%') # annot_kws={"fontsize": "large"}
-ax.set_xlabel('\nPredicted Values', fontsize="xx-large")
-ax.set_ylabel('Actual Values\n', fontsize="xx-large");
+    # ACCURACY PLOT ----------------------------------------------------------------------------------------------------
 
-## Ticket labels - List must be in alphabetical order
-ax.xaxis.set_ticklabels(['Normal', 'DoS', 'Probe', 'R2L', 'U2R'])
-ax.yaxis.set_ticklabels(['Normal', 'DoS', 'Probe', 'R2L', 'U2R'])
+    plt.subplots(figsize=(6, 3), dpi=300)
+    plt.plot(np.arange(n_epochs), history.history['categorical_accuracy'], '-b',
+                 np.arange(n_epochs), history.history['val_categorical_accuracy'], '-r',
+                 linewidth="0.8")
+    plt.ylim([0, 1])
+    plt.xlabel("N° Epochs", fontsize="medium")
+    plt.ylabel("Accuracy", fontsize="medium")
+    plt.legend(('Training Accuracy', 'Validation Accuracy'), fontsize="medium", loc='lower right', shadow=True)
+    plt.grid(color='gray', linestyle='--', linewidth=0.2)
+    plt.subplots_adjust(left=0.1, right=0.9, bottom=0.15, top=0.85)
+    plt.savefig("ACC" + str(L) + "_39_" + str(neurons2) + ".eps")
 
-## Display the visualization of the Confusion Matrix.
-plt.show()
-print(report)
-"""
-training_acc = model.evaluate(train_examples, train_categorical_labels, verbose=0)
-val_acc = model.evaluate(val_examples, val_categorical_labels, verbose=0)
-test_acc = model.evaluate(test_examples, test_categorical_labels, verbose=0)
-print(str(neurons1) + " " + str(neurons2) + ": TRAINING_LOSS = " + str(training_acc) +
-      " VAL_LOSS = " + str(val_acc) + " TEST_PERFORMANCE = " + str(test_acc) + "\n")
-#f.close()
+    # SAVE AND PRINT PERFORMANCE METRICS -------------------------------------------------------------------------------
+
+    print("MEAN EPOCH DURATION: " + str(np.mean(time_callback.times)))
+    print("FINAL EPOCH TRAINING ERROR: " + str(history.history['loss'][-1]))
+    print("FINAL EPOCH VALIDATION ERROR: " + str(
+        history.history['val_loss'][-1]))
+    print("FINAL ACCURACY: " + str(history.history['categorical_accuracy'][-1]) + ", FINAL VALIDATION ACCURACY: " + str(history.history["val_categorical_accuracy"][-1]))
+    file.write("MEAN EPOCH DURATION: " + str(np.mean(time_callback.times)) + "\n")
+    file.write("FINAL EPOCH TRAINING ERROR: " + str(history.history['loss'][-1]) + "\n")
+    file.write("FINAL EPOCH VALIDATION ERROR: " + str(history.history['val_loss'][-1]) + "\n")
+    file.write("FINAL ACCURACY: " + str(history.history['categorical_accuracy'][-1]) + ", FINAL VALIDATION ACCURACY: " + str(history.history["val_categorical_accuracy"][-1]) + "\n")
+
+    """y_pred = model.predict(test_examples)
+    y_pred = np.argmax(y_pred, axis=1)
+    y_labels = np.argmax(test_categorical_labels, axis=1)
+
+    report = classification_report(test_labels, y_pred,
+                                   target_names=['Normal', 'IC', 'LM', 'C2'],
+                                   digits=4,
+                                   zero_division=1,
+                                   output_dict=True)
+    supports = [report['Normal']['support'],
+                report['IC']['support'],
+                report['LM']['support'],
+                report['C2']['support']]
+    cf_matrix = confusion_matrix(y_labels, y_pred)
+    plt.figure(figsize=(6, 4), dpi=300)
+    ax = sns.heatmap((cf_matrix.T/supports).T, annot=True, cmap='Blues', fmt='.2%') # annot_kws={"fontsize": "large"}
+    ax.set_xlabel('\nPredicted Values', fontsize="xx-large")
+    ax.set_ylabel('Actual Values\n', fontsize="xx-large");
+
+    ## Ticket labels - List must be in alphabetical order
+    ax.xaxis.set_ticklabels(['Normal', 'IC', 'LM', 'C2'])
+    ax.yaxis.set_ticklabels(['Normal', 'IC', 'LM', 'C2'])
+
+    ## Display the visualization of the Confusion Matrix.
+    #plt.show()
+    print(report)
+    #print(model.summary())"""
+
+file.close()
