@@ -31,13 +31,6 @@
             </Attribute>
           </value>
         </entry>
-        <entry key="\LANL_test.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
         <entry key="\training.csv">
           <value>
             <Attribute>
